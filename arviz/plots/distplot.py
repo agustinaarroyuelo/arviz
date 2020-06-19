@@ -32,6 +32,7 @@ def plot_dist(
     ax=None,
     backend=None,
     backend_kwargs=None,
+    is_circular=False,
     show=None,
     **kwargs
 ):
@@ -160,12 +161,12 @@ def plot_dist(
 
     if kind == "hist":
         hist_kwargs = matplotlib_kwarg_dealiaser(hist_kwargs, "hist")
-        hist_kwargs.setdefault("bins", get_bins(values))
+        hist_kwargs.setdefault("bins", None)# get_bins(values)) # Default should be none?
         hist_kwargs.setdefault("cumulative", cumulative)
         hist_kwargs.setdefault("color", color)
         hist_kwargs.setdefault("label", label)
         hist_kwargs.setdefault("rwidth", 0.9)
-        hist_kwargs.setdefault("align", "left")
+        hist_kwargs.setdefault("align", 'left')
         hist_kwargs.setdefault("density", True)
 
         if rotated:
@@ -197,6 +198,7 @@ def plot_dist(
         hist_kwargs=hist_kwargs,
         ax=ax,
         backend_kwargs=backend_kwargs,
+        is_circular=is_circular,
         show=show,
         **kwargs,
     )

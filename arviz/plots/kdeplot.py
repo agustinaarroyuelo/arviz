@@ -32,6 +32,7 @@ def plot_kde(
     backend_kwargs=None,
     show=None,
     return_glyph=False,
+    is_circular=False, 
     **kwargs
 ):
     """1D or 2D KDE plot taking into account boundary conditions.
@@ -235,6 +236,7 @@ def plot_kde(
         backend_kwargs=backend_kwargs,
         show=show,
         return_glyph=return_glyph,
+        is_circular=is_circular,
         **kwargs,
     )
 

@@ -35,6 +35,7 @@ def plot_kde(
     ax,
     legend,
     backend_kwargs,
+    is_circular,
     show,
 ):
     """Matplotlib kde plot."""
@@ -76,7 +77,11 @@ def plot_kde(
 
         rug_space = max(density) * rug_kwargs.pop("space")
 
-        x = np.linspace(lower, upper, len(density))
+        if is_circular:
+            x = np.linspace(-np.pi, np.pi, len(density))
+            ax.set_yticks([])
+        else:
+            x = np.linspace(lower, upper, len(density))
 
         fill_func = ax.fill_between
         fill_x, fill_y = x, density

@@ -4,6 +4,7 @@ from itertools import cycle
 import warnings
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import matplotlib.gridspec as gridspec
 import numpy as np
 
 from . import backend_kwarg_defaults, backend_show
@@ -31,6 +32,7 @@ def plot_trace(
     hist_kwargs,
     trace_kwargs,
     rank_kwargs,
+    circular_vars,
     plotters,
     divergence_data,
     axes,
@@ -134,10 +136,11 @@ def plot_trace(
     trace_kwargs.setdefault("linewidth", linewidth)
     plot_kwargs.setdefault("linewidth", linewidth)
 
-    if axes is None:
-        _, axes = plt.subplots(len(plotters), 2, squeeze=False, figsize=figsize, **backend_kwargs)
+    #if axes is None:
+        #_, axes = plt.subplots(len(plotters), 2, squeeze=False, figsize=figsize, **backend_kwargs)
 
-    axes = np.atleast_2d(axes)
+    #axes = np.atleast_2d(axes)
+
     # Check the input for lines
     if lines is not None:
         all_var_names = set(plotter[0] for plotter in plotters)
@@ -153,56 +156,30 @@ def plot_trace(
                 )
             )
 
-    for idx, (var_name, selection, value) in enumerate(plotters):
-        value = np.atleast_2d(value)
+    fig = plt.figure(tight_layout=True, figsize=figsize)
+    spec = gridspec.GridSpec(ncols=2, nrows=len(plotters), figure=fig)
 
-        if len(value.shape) == 2:
-            if compact_prop:
-                plot_kwargs[compact_prop[0]] = compact_prop[1][0]
-                trace_kwargs[compact_prop[0]] = compact_prop[1][0]
-            _plot_chains_mpl(
-                axes,
-                idx,
-                value,
-                data,
-                chain_prop,
-                combined,
-                xt_labelsize,
-                rug,
-                kind,
-                trace_kwargs,
-                hist_kwargs,
-                plot_kwargs,
-                fill_kwargs,
-                rug_kwargs,
-                rank_kwargs,
-            )
-            if compact_prop:
-                plot_kwargs.pop(compact_prop[0])
-                trace_kwargs.pop(compact_prop[0])
-        else:
-            sub_data = data[var_name].sel(**selection)
-            legend_labels = format_coords_as_labels(sub_data, skip_dims=("chain", "draw"))
-            legend_title = ", ".join(
-                [
-                    "{}".format(coord_name)
-                    for coord_name in sub_data.coords
-                    if coord_name not in {"chain", "draw"}
-                ]
-            )
-            value = value.reshape((value.shape[0], value.shape[1], -1))
-            compact_prop_cycle = cycle(compact_prop[1])
-            handles = []
-            for sub_idx, label, prop in zip(
-                range(value.shape[2]), legend_labels, compact_prop_cycle
-            ):
+
+    for idy in range(2):
+        for idx, (var_name, selection, value) in enumerate(plotters):
+            value = np.atleast_2d(value)
+
+            if var_name in circular_vars and idy == 0:
+                is_circular=True
+            else:
+                is_circular=False
+
+            axes = fig.add_subplot(spec[idx, idy], polar=is_circular)
+
+            if len(value.shape) == 2:
                 if compact_prop:
-                    plot_kwargs[compact_prop[0]] = prop
-                    trace_kwargs[compact_prop[0]] = prop
+                    plot_kwargs[compact_prop[0]] = compact_prop[1][0]
+                    trace_kwargs[compact_prop[0]] = compact_prop[1][0]
                 _plot_chains_mpl(
                     axes,
                     idx,
-                    value[..., sub_idx],
+                    idy,
+                    value,
                     data,
                     chain_prop,
                     combined,
@@ -215,70 +192,115 @@ def plot_trace(
                     fill_kwargs,
                     rug_kwargs,
                     rank_kwargs,
+                    is_circular,
                 )
-                if legend:
-                    handles.append(
-                        Line2D(
-                            [], [], label=label, **{chain_prop[0]: chain_prop[1][0]}, **plot_kwargs
-                        )
+                if compact_prop:
+                    plot_kwargs.pop(compact_prop[0])
+                    trace_kwargs.pop(compact_prop[0])
+            else:
+                sub_data = data[var_name].sel(**selection)
+                legend_labels = format_coords_as_labels(sub_data, skip_dims=("chain", "draw"))
+                legend_title = ", ".join(
+                    [
+                        "{}".format(coord_name)
+                        for coord_name in sub_data.coords
+                        if coord_name not in {"chain", "draw"}
+                    ]
+                )
+                value = value.reshape((value.shape[0], value.shape[1], -1))
+                compact_prop_cycle = cycle(compact_prop[1])
+                handles = []
+                for sub_idx, label, prop in zip(
+                    range(value.shape[2]), legend_labels, compact_prop_cycle
+                ):
+                    if compact_prop:
+                        plot_kwargs[compact_prop[0]] = prop
+                        trace_kwargs[compact_prop[0]] = prop
+                    _plot_chains_mpl(
+                        axes,
+                        idx,
+                        idy,
+                        value[..., sub_idx],
+                        data,
+                        chain_prop,
+                        combined,
+                        xt_labelsize,
+                        rug,
+                        kind,
+                        trace_kwargs,
+                        hist_kwargs,
+                        plot_kwargs,
+                        fill_kwargs,
+                        rug_kwargs,
+                        rank_kwargs,
+                        is_circular,
                     )
-            if legend:
-                axes[idx, 0].legend(handles=handles, title=legend_title)
-            plot_kwargs.pop(compact_prop[0], None)
-            trace_kwargs.pop(compact_prop[0], None)
+                    if legend:
+                        handles.append(
+                            Line2D(
+                                [], [], label=label, **{chain_prop[0]: chain_prop[1][0]}, **plot_kwargs
+                            )
+                        )
+                if legend:
+                    axes.legend(handles=handles, title=legend_title)#[idx, 0]
+                plot_kwargs.pop(compact_prop[0], None)
+                trace_kwargs.pop(compact_prop[0], None)
 
-        if value[0].dtype.kind == "i":
-            xticks = get_bins(value)
-            axes[idx, 0].set_xticks(xticks[:-1])
-        axes[idx, 0].set_yticks([])
-        for col in (0, 1):
-            axes[idx, col].set_title(make_label(var_name, selection), fontsize=titlesize, wrap=True)
-            axes[idx, col].tick_params(labelsize=xt_labelsize)
+            if value[0].dtype.kind == "i":
+                xticks = get_bins(value)
+                axes.set_xticks(xticks[:-1])#[idx, 0]
+            axes.set_yticks([])#[idx, 0]
+            for col in (0, 1):
+                axes.set_title(make_label(var_name, selection), fontsize=titlesize, wrap=True)#[idx, col]
+                axes.tick_params(labelsize=xt_labelsize)#[idx, col]
 
-        xlims = [ax.get_xlim() for ax in axes[idx, :]]
-        ylims = [ax.get_ylim() for ax in axes[idx, :]]
+            #xlims = [ax.get_xlim() for ax in axes[idx, :]]
+            #ylims = [ax.get_ylim() for ax in axes[idx, :]]
 
-        if divergences:
-            div_selection = {k: v for k, v in selection.items() if k in divergence_data.dims}
-            divs = divergence_data.sel(**div_selection).values
-            # if combined:
-            #     divs = divs.flatten()
-            divs = np.atleast_2d(divs)
+            xlims = axes.get_xlim() 
+            ylims = axes.get_ylim() 
 
-            for chain, chain_divs in enumerate(divs):
-                div_draws = data.draw.values[chain_divs]
-                div_idxs = np.arange(len(chain_divs))[chain_divs]
-                if div_idxs.size > 0:
-                    if divergences == "top":
-                        ylocs = [ylim[1] for ylim in ylims]
-                    else:
-                        ylocs = [ylim[0] for ylim in ylims]
-                    values = value[chain, div_idxs]
-                    if kind == "trace":
-                        axes[idx, 1].plot(
-                            div_draws,
-                            np.zeros_like(div_idxs) + ylocs[1],
+            if divergences:
+                div_selection = {k: v for k, v in selection.items() if k in divergence_data.dims}
+                divs = divergence_data.sel(**div_selection).values
+                # if combined:
+                #     divs = divs.flatten()
+                divs = np.atleast_2d(divs)
+
+                for chain, chain_divs in enumerate(divs):
+                    div_draws = data.draw.values[chain_divs]
+                    div_idxs = np.arange(len(chain_divs))[chain_divs]
+                    if div_idxs.size > 0:
+                        if divergences == "top":
+                            ylocs = [ylim[1] for ylim in ylims]
+                        else:
+                            ylocs = [ylim[0] for ylim in ylims]
+                        values = value[chain, div_idxs]
+                        if kind == "trace":
+                            axes.plot(
+                                div_draws,
+                                np.zeros_like(div_idxs) + ylocs[1],
+                                marker="|",
+                                color="black",
+                                markeredgewidth=1.5,
+                                markersize=30,
+                                linestyle="None",
+                                alpha=hist_kwargs["alpha"],
+                                zorder=-5,
+                            )#[idx, 1]
+                            axes.set_ylim(*ylims[1])#[idx, 1]
+                        axes.plot(
+                            values,
+                            np.zeros_like(values) + ylocs[0],
                             marker="|",
                             color="black",
                             markeredgewidth=1.5,
                             markersize=30,
                             linestyle="None",
-                            alpha=hist_kwargs["alpha"],
+                            alpha=trace_kwargs["alpha"],
                             zorder=-5,
-                        )
-                        axes[idx, 1].set_ylim(*ylims[1])
-                    axes[idx, 0].plot(
-                        values,
-                        np.zeros_like(values) + ylocs[0],
-                        marker="|",
-                        color="black",
-                        markeredgewidth=1.5,
-                        markersize=30,
-                        linestyle="None",
-                        alpha=trace_kwargs["alpha"],
-                        zorder=-5,
-                    )
-                    axes[idx, 0].set_ylim(*ylims[0])
+                        )#[idx, 0]
+                        axes.set_ylim(*ylims[0])#[idx, 0]
 
         for _, _, vlines in (j for j in lines if j[0] == var_name and j[1] == selection):
             if isinstance(vlines, (float, int)):
@@ -289,19 +311,22 @@ def plot_trace(
                     raise ValueError(
                         "line-positions should be numeric, found {}".format(line_values)
                     )
-            axes[idx, 0].vlines(line_values, *ylims[0], colors="black", linewidth=1.5, alpha=0.75)
+            axes.vlines(line_values, *ylims[0], colors="black", linewidth=1.5, alpha=0.75)#[idx, 0]
             if kind == "trace":
-                axes[idx, 1].hlines(
+                axes.hlines(
                     line_values,
                     *xlims[1],
                     colors="black",
                     linewidth=1.5,
                     alpha=trace_kwargs["alpha"]
-                )
-        axes[idx, 0].set_ylim(bottom=0, top=ylims[0][1])
+                )#[idx, 1]
+        
+        #axes.set_ylim(bottom=0, top=ylims[0][1])#[idx, 0]
+        axes.set_ylim(bottom=ylims[0], top=ylims[1])
         if kind == "trace":
-            axes[idx, 1].set_xlim(left=data.draw.min(), right=data.draw.max())
-            axes[idx, 1].set_ylim(*ylims[1])
+            axes.set_xlim(left=data.draw.min(), right=data.draw.max())#[idx, 1]
+            #axes.set_ylim(*ylims[1])#[idx, 1]
+            axes.set_ylim(*ylims)
     if legend:
         legend_kwargs = trace_kwargs if combined else plot_kwargs
         handles = [
@@ -315,7 +340,7 @@ def plot_trace(
                     [], [], label="combined", **{chain_prop[0]: chain_prop[1][-1]}, **plot_kwargs
                 ),
             )
-        axes[0, 0].legend(handles=handles, title="chain")
+        axes.legend(handles=handles, title="chain")#[0, 0]
 
     if backend_show(show):
         plt.show()
@@ -326,6 +351,7 @@ def plot_trace(
 def _plot_chains_mpl(
     axes,
     idx,
+    idy,
     value,
     data,
     chain_prop,
@@ -339,46 +365,52 @@ def _plot_chains_mpl(
     fill_kwargs,
     rug_kwargs,
     rank_kwargs,
+    is_circular,
 ):
     for chain_idx, row in enumerate(value):
         if kind == "trace":
-            axes[idx, 1].plot(
-                data.draw.values, row, **{chain_prop[0]: chain_prop[1][chain_idx]}, **trace_kwargs
-            )
+            if idy == 1:
+                axes.plot(
+                    data.draw.values, row, **{chain_prop[0]: chain_prop[1][chain_idx]}, **trace_kwargs
+                )#[idx, 1]
 
         if not combined:
             plot_kwargs[chain_prop[0]] = chain_prop[1][chain_idx]
+            if not idy:
+                plot_dist(
+                    values=row,
+                    textsize=xt_labelsize,
+                    rug=rug,
+                    ax=axes,#[idx, 0],
+                    hist_kwargs=hist_kwargs,
+                    plot_kwargs=plot_kwargs,
+                    fill_kwargs=fill_kwargs,
+                    rug_kwargs=rug_kwargs,
+                    backend="matplotlib",
+                    show=False,
+                    is_circular=is_circular,
+                )
+                plot_kwargs.pop(chain_prop[0])
+
+    if kind == "rank_bars":
+        plot_rank(data=value, kind="bars", ax=axes, **rank_kwargs)#[idx, 1]
+    elif kind == "rank_vlines":
+        plot_rank(data=value, kind="vlines", ax=axes, **rank_kwargs)#[idx, 1]
+
+    if combined:
+        plot_kwargs[chain_prop[0]] = chain_prop[1][-1]
+        if not idy:
             plot_dist(
-                values=row,
+                values=value.flatten(),
                 textsize=xt_labelsize,
                 rug=rug,
-                ax=axes[idx, 0],
+                ax=axes, #[idx, 0],
                 hist_kwargs=hist_kwargs,
                 plot_kwargs=plot_kwargs,
                 fill_kwargs=fill_kwargs,
                 rug_kwargs=rug_kwargs,
                 backend="matplotlib",
                 show=False,
+                is_circular=is_circular,
             )
             plot_kwargs.pop(chain_prop[0])
-
-    if kind == "rank_bars":
-        plot_rank(data=value, kind="bars", ax=axes[idx, 1], **rank_kwargs)
-    elif kind == "rank_vlines":
-        plot_rank(data=value, kind="vlines", ax=axes[idx, 1], **rank_kwargs)
-
-    if combined:
-        plot_kwargs[chain_prop[0]] = chain_prop[1][-1]
-        plot_dist(
-            values=value.flatten(),
-            textsize=xt_labelsize,
-            rug=rug,
-            ax=axes[idx, 0],
-            hist_kwargs=hist_kwargs,
-            plot_kwargs=plot_kwargs,
-            fill_kwargs=fill_kwargs,
-            rug_kwargs=rug_kwargs,
-            backend="matplotlib",
-            show=False,
-        )
-        plot_kwargs.pop(chain_prop[0])
