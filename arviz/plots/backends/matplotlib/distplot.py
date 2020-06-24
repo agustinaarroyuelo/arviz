@@ -90,23 +90,26 @@ def plot_dist(
 
 def _histplot_mpl_op(values, values2, rotated, ax, hist_kwargs, is_circular):
     """Add a histogram for the data to the axes."""
+
+    bins = hist_kwargs.pop("bins") 
+
     if is_circular:
 
-        hist_kwargs["align"] = 'right'
-
         if values.min() < np.pi and values.max() > np.pi:
+            if bins is None:
+                bins = get_bins(values)        
             values = np.deg2rad(values)
+            bins = np.deg2rad(bins)
         else:
             label = ['$0$', '$\pi/4$', '$\pi/2$', '$3\pi/4$',
                   '$\pi$', '$5\pi/4$', '$3\pi/2$', '$7\pi/4$']
-        
+
             ax.set_xticklabels(label)
-        ax.set_yticks([])
+        ax.set_yticklabels([])
 
     if values2 is not None:
         raise NotImplementedError("Insert hexbin plot here")
 
-    bins = hist_kwargs.pop("bins")
     
     if bins is None:
         # If default argument in hist_kwargs is bins = get_bins(values),
